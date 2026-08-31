@@ -9,7 +9,9 @@ tone_instructions: >-
 
 reviews:
   profile: chill
-  high_level_summary: true
+  # false: this key writes "Summary by CodeRabbit" into the PR description,
+  # which the squash-merge dialog then inherits into the commit message.
+  high_level_summary: false
   poem: false
   collapse_walkthrough: true
   sequence_diagrams: false
