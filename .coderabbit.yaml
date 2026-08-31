@@ -20,6 +20,11 @@ reviews:
     docstrings:
       enabled: false
   path_instructions:
+    - path: "**"
+      instructions: >-
+        Comment only on real defects: correctness, security, privacy, data
+        loss, resource leaks, concurrency. Do not comment on style, naming,
+        formatting or documentation nits.
     - path: "Sources/QuickAI/**"
       instructions: >-
         AGENTS.md at the repo root is the contract; its invariants outrank any
@@ -29,12 +34,17 @@ reviews:
         state or config, or destroy user data without a confirmation. Do not
         propose stylistic refactors and do not comment on formatting.
   tools:
-    # Security stays on, pure-style linters stay off.
+    # Security stays on, pure-style linters stay off. Semgrep is not listed:
+    # it only runs with a repo-local semgrep.yml, which does not exist yet.
     gitleaks:
       enabled: true
-    semgrep:
-      enabled: true
     swiftlint:
+      enabled: false
+    yamllint:
+      enabled: false
+    markdownlint:
+      enabled: false
+    languagetool:
       enabled: false
 
 chat:
