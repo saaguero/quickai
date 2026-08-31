@@ -42,11 +42,11 @@ Then open Settings (⌘, in the panel, or the bolt icon in the menu bar), paste 
 | Key | |
 |---|---|
 | ⌥Space | show / hide the panel (configurable) |
-| ↩ / ⎋ | send / stop, back, close |
+| ⏎ / ⎋ | send / stop, back, close |
 | ⌘N | new chat |
 | ⌘P | switch model |
 | ⌘R | retry the last answer |
-| ⌘Y | history (fuzzy search, ↩ resumes) |
+| ⌘Y | history (fuzzy search, ⏎ resumes) |
 | ⌘[ / ⌘] | older / newer conversation |
 | ⌘⇧C / ⌘⇧A | copy the answer / the whole conversation |
 | ⌘/ | every shortcut, in the panel |
