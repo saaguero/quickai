@@ -30,6 +30,7 @@ Santi's preferences override anything in this file. The ones that come up consta
 
 - **Never commit or push unless he asks.** Editing, staging and branching are fine; the tree stays dirty until he says so.
 - **Verify in the bundled app**, not in `swift run`, and not by reasoning about the code.
+- **Checks come in two tiers, and only one is free to run.** The scripts and anything else that runs headless (a child process, a pty) are background checks: run them whenever. Anything that drives the screen with synthetic input (osascript keystrokes into the panel, clicking, pressing his hotkey) is a UI test: **ask Santi first, every time**, because his keyboard may be mid-sentence in another window. This rule exists because a session once typed a test question into Raycast while he was working.
 - Code, comments and output strings are in English whatever language the conversation is in.
 - No em dashes in anything a human reads.
 - Session state (plans, notes, decisions) lives in `.agent/`, which is gitignored. It never lands in a commit.
