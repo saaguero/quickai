@@ -29,6 +29,7 @@ Deleting a conversation moves it to a 30-day bin. `emptyTrash()` is the only irr
 Santi's preferences override anything in this file. The ones that come up constantly:
 
 - **Never commit or push unless he asks.** Editing, staging and branching are fine; the tree stays dirty until he says so.
+- **Nothing lands on main directly.** Every change arrives by PR from a branch; a repository ruleset enforces it (PRs only, squash or rebase, review threads resolved before merge, no bypass for anyone). A trivial fix takes the same path, just as a smaller PR.
 - **Verify in the bundled app**, not in `swift run`, and not by reasoning about the code.
 - **Checks come in two tiers, and only one is free to run.** The scripts and anything else that runs headless (a child process, a pty) are background checks: run them whenever. Anything that drives the screen with synthetic input (osascript keystrokes into the panel, clicking, pressing his hotkey) is a UI test: **ask Santi first, every time**, because his keyboard may be mid-sentence in another window. This rule exists because a session once typed a test question into Raycast while he was working.
 - Code, comments and output strings are in English whatever language the conversation is in.
@@ -87,6 +88,8 @@ There is no XCTest target. Each check is a script, and each one covers something
   - About 12 lines of body is the ceiling. Longer than that means it belongs in this file or in a comment next to the code.
 - End with the `Co-Authored-By:` trailer when an agent wrote the change.
 - One concern per commit. If the subject needs an "and", consider two commits.
+- Merges are squash or rebase, never a merge commit, and the branch is deleted on merge. A squash merge takes the PR title as the commit subject and the PR body as the commit body, so both follow the rules above.
+- CodeRabbit reviews every PR. Address or rebut each comment and resolve its thread; the ruleset blocks merging while any review thread is open. Rebutting with a reply is a valid outcome, silently resolving without one is not.
 - Never open a PR unless Santi asks. PRs carry a before/after screenshot for anything visual.
 
 ## How it works
@@ -148,3 +151,4 @@ Everything is in `Sources/QuickAI/`, one main type per file, no subfolders.
 - ATS declares `NSAllowsLocalNetworking` only (plain http to local-network hostnames; numeric-IP URLs are exempt anyway). Never widen it to `NSAllowsArbitraryLoads`.
 - Never commit keys, and keep personal environment details such as LAN addresses out of tracked files. They belong in `.agent/`.
 - MIT licensed. The README is the public face: main selling points, not a feature list.
+- Parked until the project has users, both copied from pingdotgg/t3code: structured issue templates with blank issues disabled (a bug report must carry the macOS version, the build timestamp from the status-bar menu, and the active provider, because a report without those three is unanswerable), and the vouch workflow that labels an external PR with a trust status (`vouch:*`) from a checked-in list. Neither earns its keep at zero contributors; revisit at the first stranger's bug report and the first stranger's PR respectively.
