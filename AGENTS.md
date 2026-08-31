@@ -87,6 +87,7 @@ There is no XCTest target. Each check is a script, and each one covers something
   - A single change: two to four lines of prose.
   - About 12 lines is the ceiling. Longer than that means it belongs in this file or in a comment next to the code.
 - End a branch commit with the `Co-Authored-By:` trailer when an agent wrote the change (the trailer does not count against the one-line rule; the squash dialog collects co-authors from branch commits).
+- No "Generated with Claude Code" line in PR bodies: the body becomes the squash commit on main, and the co-author trailer already carries the attribution there.
 - One concern per PR. If the title needs an "and", consider two PRs.
 - Merges are squash or rebase, never a merge commit, and the branch is deleted on merge.
 - CodeRabbit reviews every PR. Address or rebut each comment and resolve its thread; the ruleset blocks merging while any review thread is open. Rebutting with a reply is a valid outcome, silently resolving without one is not.
