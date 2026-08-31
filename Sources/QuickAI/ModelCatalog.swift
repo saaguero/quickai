@@ -113,6 +113,42 @@ enum ModelCatalog {
         "claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5", "claude-fable-5",
     ].map { ModelInfo(id: $0, promptPrice: nil, completionPrice: nil) }
 
+    /// Models offered for GitHub Copilot.
+    ///
+    /// The CLI has no model-list endpoint either, but its own `help config`
+    /// documents the valid `model` values, so the list is parsed out of the
+    /// installed binary and never goes stale with an update. "auto" is pinned
+    /// first: it is Copilot's own routing and, on some plans (Education,
+    /// measured), the only value the backend accepts; an unavailable favorite
+    /// fails per turn with a readable error, so starring optimistically is fine.
+    static func fetchCopilot(install: HarnessInstall) async -> [ModelInfo] {
+        let ids = await Task.detached(priority: .userInitiated) { () -> [String] in
+            guard let result = ProcessRunner.run(install.path, ["help", "config"], timeout: 10),
+                  result.succeeded
+            else { return [] }
+            return parseCopilotModels(from: result.stdout)
+        }.value
+        return (["auto"] + ids).map { ModelInfo(id: $0, promptPrice: nil, completionPrice: nil) }
+    }
+
+    /// The quoted ids listed directly under the "`model`:" setting. Other
+    /// settings carry quoted lists too, so only the lines contiguous with that
+    /// heading count.
+    static func parseCopilotModels(from helpText: String) -> [String] {
+        var models: [String] = []
+        var inModelBlock = false
+        for rawLine in helpText.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if !inModelBlock {
+                inModelBlock = line.hasPrefix("`model`:")
+                continue
+            }
+            guard line.hasPrefix("- \""), line.hasSuffix("\"") else { break }
+            models.append(String(line.dropFirst(3).dropLast(1)))
+        }
+        return models
+    }
+
     private static func perToken(_ value: Any?) -> Double? {
         guard let perMillion = price(value) else { return nil }
         return perMillion / 1_000_000

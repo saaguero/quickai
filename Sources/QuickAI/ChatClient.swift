@@ -39,11 +39,13 @@ enum ChatClient {
             return openAIStream(provider: provider, messages: messages)
         case .harness(let kind):
             guard let install = provider.install else {
-                return AsyncThrowingStream {
-                    $0.finish(throwing: kind == .opencode
-                        ? OpenCodeServerError.notInstalled
-                        : ClaudeCodeClientError.notInstalled)
+                let missing: Error
+                switch kind {
+                case .opencode: missing = OpenCodeServerError.notInstalled
+                case .claudeCode: missing = ClaudeCodeClientError.notInstalled
+                case .copilot: missing = CopilotClientError.notInstalled
                 }
+                return AsyncThrowingStream { $0.finish(throwing: missing) }
             }
             switch kind {
             case .opencode:
@@ -57,6 +59,16 @@ enum ChatClient {
                 )
             case .claudeCode:
                 return ClaudeCodeClient.stream(
+                    install: install,
+                    model: provider.model,
+                    systemPrompt: provider.leanMode ? systemPrompt : nil,
+                    lean: provider.leanMode,
+                    conversationId: conversationId,
+                    messages: messages,
+                    ephemeral: ephemeral
+                )
+            case .copilot:
+                return CopilotClient.stream(
                     install: install,
                     model: provider.model,
                     systemPrompt: provider.leanMode ? systemPrompt : nil,

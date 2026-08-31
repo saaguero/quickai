@@ -8,6 +8,7 @@ import Foundation
 enum HarnessKind: String, CaseIterable, Identifiable, Codable {
     case opencode
     case claudeCode
+    case copilot
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .opencode: return "opencode"
         case .claudeCode: return "claude"
+        case .copilot: return "copilot"
         }
     }
 
@@ -26,6 +28,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .opencode: return "OpenCode"
         case .claudeCode: return "Claude Code"
+        case .copilot: return "GitHub Copilot"
         }
     }
 
@@ -34,6 +37,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .opencode: return "brew install opencode, then run: opencode auth login"
         case .claudeCode: return "install Claude Code, then run: claude auth login"
+        case .copilot: return "brew install copilot-cli, then run: copilot login"
         }
     }
 
@@ -49,6 +53,11 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
             return (
                 "Claude Code answers as a plain assistant: no tools, no skills, no plugins, no CLAUDE.md.",
                 "Claude Code behaves normally, with its tools and your customizations. Slower, and it can read files. Anything that needs permission is denied: nothing here can approve it."
+            )
+        case .copilot:
+            return (
+                "Copilot answers as a plain assistant: no tools, no MCP servers.",
+                "Copilot behaves normally, with its built-in tools and the GitHub MCP server (your own MCP servers and sessions stay untouched: QuickAI gives it a private home). Slower, and it can read files. Anything that needs permission is denied: nothing here can approve it."
             )
         }
     }
@@ -131,7 +140,8 @@ enum HarnessDetector {
     }
 
     /// First non-empty line, trimmed. `opencode --version` prints "1.18.0";
-    /// `claude --version` prints "2.1.251 (Claude Code)".
+    /// `claude --version` prints "2.1.251 (Claude Code)"; `copilot --version`
+    /// prints "GitHub Copilot CLI 1.0.82." with an update hint on line two.
     private static func version(from output: String) -> String? {
         output
             .split(separator: "\n")

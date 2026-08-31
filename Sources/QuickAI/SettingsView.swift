@@ -116,6 +116,11 @@ struct SettingsView: View {
 /// in, so the request is covered by that subscription instead of an API key.
 struct HarnessSection: View {
     @ObservedObject var harness: HarnessSettings
+    /// Set by CopilotClient when the CLI rejects an explicit model, cleared
+    /// when one answers. Copilot exposes no way to ask a plan what it includes
+    /// (probed: config, env, logs, flag ordering), so the panel learns it from
+    /// the first rejection instead of spending a turn to find out.
+    @AppStorage(CopilotClient.autoOnlyDefaultsKey) private var copilotAutoOnly = false
 
     private var kind: HarnessKind { harness.kind }
 
@@ -142,15 +147,38 @@ struct HarnessSection: View {
                     .font(.system(size: SettingsMetrics.secondary))
                     .foregroundStyle(.secondary)
 
+                if kind == .copilot {
+                    if copilotAutoOnly {
+                        Label(
+                            "Copilot is rejecting every model except \"auto\": your plan decides what the CLI may use, and some (Copilot Student among them) only include auto. Starred models stay listed and will work if the plan changes.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.system(size: SettingsMetrics.secondary))
+                        .foregroundStyle(.orange)
+                    } else {
+                        Text("Copilot checks each model against your plan per question; some plans (Copilot Student among them) only include \"auto\".")
+                            .font(.system(size: SettingsMetrics.secondary))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 if let install = harness.install {
                     ModelFavoritesEditor(
                         favorites: $harness.favorites,
                         selected: $harness.model,
                         fallback: "",
-                        source: kind == .opencode ? .opencode(install) : .claudeCode
+                        source: modelSource(for: install)
                     )
                 }
             }
+        }
+    }
+
+    private func modelSource(for install: HarnessInstall) -> ModelSource {
+        switch kind {
+        case .opencode: return .opencode(install)
+        case .claudeCode: return .claudeCode
+        case .copilot: return .copilot(install)
         }
     }
 
@@ -177,14 +205,19 @@ enum ModelSource: Equatable {
     case openAI(baseUrl: String, apiKey: String?)
     case opencode(HarnessInstall)
     case claudeCode
+    case copilot(HarnessInstall)
 
     /// Whether a model id that is not on the list can still be starred.
     ///
     /// Claude Code has no endpoint to enumerate models, so its list is a fixed
-    /// one and typing an id it does not know has to be possible.
+    /// one and typing an id it does not know has to be possible. Copilot's list
+    /// is parsed out of its own help text, which trails what the backend
+    /// actually serves, so the same escape hatch applies.
     var allowsCustomIds: Bool {
-        if case .claudeCode = self { return true }
-        return false
+        switch self {
+        case .claudeCode, .copilot: return true
+        case .openAI, .opencode: return false
+        }
     }
 
     /// Whether the list can be re-fetched from somewhere.
@@ -359,6 +392,8 @@ struct ModelFavoritesEditor: View {
                 models = try await ModelCatalog.fetchOpenCode(install: install)
             case .claudeCode:
                 models = ModelCatalog.claudeCodeModels
+            case .copilot(let install):
+                models = await ModelCatalog.fetchCopilot(install: install)
             }
         } catch {
             errorText = error.localizedDescription

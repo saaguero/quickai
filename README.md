@@ -8,13 +8,13 @@ Built as a free replacement for Raycast Quick AI after it moved behind Raycast P
 
 ## Why
 
-Native Swift (SwiftUI + AppKit), no Electron, no account, no telemetry. It lives in the menu bar and shows a Spotlight-style floating panel over whatever you are doing. You bring the model: an OpenRouter key (the free tier works), your own OpenAI-compatible server, or the Claude Code / OpenCode CLI you are already logged into.
+Native Swift (SwiftUI + AppKit), no Electron, no account, no telemetry. It lives in the menu bar and shows a Spotlight-style floating panel over whatever you are doing. You bring the model: an OpenRouter key (the free tier works), your own OpenAI-compatible server, or a coding-agent CLI you are already logged into (Claude Code, OpenCode, GitHub Copilot).
 
 ## Features
 
 - **One hotkey, one Enter.** ⌥Space opens a compact input. Enter streams the answer into a full-width panel with real Markdown: tables, code blocks, lists. Follow-ups go in the same thread.
 - **Your models, your keys.** OpenRouter (including `openrouter/free`, a zero-cost router over free models) or any OpenAI-compatible local server (llama.cpp, llama-swap, LM Studio, Ollama). Star the models you actually use and switch with ⌘P.
-- **Or no key at all.** If Claude Code or OpenCode is installed and logged in, QuickAI can answer through it, so the panel runs on the subscription you already pay for. It calls the CLI you have, with its tools and customizations off by default: a plain answerer, not an agent loose on your machine.
+- **Or no key at all.** If Claude Code, OpenCode or the GitHub Copilot CLI is installed and logged in, QuickAI can answer through it, so the panel runs on the subscription you already pay for. It calls the CLI you have, with its tools and customizations off by default: a plain answerer, not an agent loose on your machine.
 - **Everything is a keystroke.** New chat, copy answer, retry, previous conversation, history, settings. The mouse is optional.
 - **History that finds things.** Conversations are saved locally and searched with a port of fzf's matching algorithm, highlights included. Deletes go to a bin for 30 days.
 - **Yours to keep.** Prompts go straight to the provider you configured, nowhere else. No sign-up, no cloud sync, no analytics.

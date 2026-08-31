@@ -212,6 +212,7 @@ final class ChatViewModel: ObservableObject {
         switch kind {
         case .opencode: await OpenCodeClient.reset(conversationId: conversationId)
         case .claudeCode: await ClaudeCodeClient.reset(conversationId: conversationId)
+        case .copilot: await CopilotClient.reset(conversationId: conversationId)
         }
     }
 

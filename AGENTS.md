@@ -10,11 +10,11 @@ Four things it cannot lose while it grows.
 
 ### 1. It answers on a subscription you already pay for
 
-Harness providers run a coding-agent CLI that is already installed and logged in (`opencode`, `claude`), so the answer is covered by that subscription and no metered API key is involved. Anything that quietly moves a turn onto API billing is a bug, not a trade-off.
+Harness providers run a coding-agent CLI that is already installed and logged in (`opencode`, `claude`, `copilot`), so the answer is covered by that subscription and no metered API key is involved. Anything that quietly moves a turn onto API billing is a bug, not a trade-off.
 
 ### 2. It cannot touch the machine
 
-The panel is a place to ask questions, not an agent. Lean mode disables every tool, and safe mode is the floor even with lean mode off: never `--auto` for opencode, never `--dangerously-skip-permissions` or `--permission-mode bypassPermissions` for claude.
+The panel is a place to ask questions, not an agent. Lean mode disables every tool, and safe mode is the floor even with lean mode off: never `--auto` for opencode, never `--dangerously-skip-permissions` or `--permission-mode bypassPermissions` for claude, never `--allow-all-tools`, `--allow-all` or `--yolo` for copilot.
 
 ### 3. It is faster than the thought that opened it
 
@@ -40,21 +40,21 @@ Santi's preferences override anything in this file. The ones that come up consta
 - **provider** is where an answer comes from: OpenRouter, a local OpenAI-compatible server, or a harness.
 - **harness** is a coding-agent CLI used as a provider, one `HarnessKind` per CLI.
 - **lean mode** is a harness running with QuickAI's own system prompt and no tools. It is the default.
-- **turn** is one question and its answer. For claude it is also one child process.
+- **turn** is one question and its answer. For claude and copilot it is also one child process.
 - **chunk** is one `StreamChunk` off a provider: `.reasoning` (live progress, never saved) or `.text` (the answer).
 - **conversation** is the durable thread, stored in `conversations.json`, capped at 50, deleted into `trash.json`.
 
 ## The three ways to hurt yourself
 
 1. **Testing the store against the real directory.** `ConversationStore`'s delete paths write real files and `emptyTrash()` is irreversible. Pointing `HOME` elsewhere does NOT redirect `FileManager.urls(for: .applicationSupportDirectory…)`. This wiped a real history once. Use `ConversationStore(directory:)` and `./scripts/store-test.sh`, which builds its own temp dir.
-2. **Putting a turn on API billing.** Three independent layers keep the subscription in charge, because a flag choice alone is not verifiable at runtime: the `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` variables are scrubbed from the child environment, `--bare` is never passed, and `apiKeySource` from the `system/init` event must read `none` before a single chunk is yielded. Never remove a layer because another one covers it.
-3. **Writing into the user's own agent state.** QuickAI writes no opencode config and never touches theirs (`prompt_async` takes `system` and `tools` per request, so no `OPENCODE_CONFIG` file is needed). Throwaway calls such as titles use `--no-session-persistence` so they never land in the user's Claude Code history. The opencode child gets its own empty working directory, a random per-launch password, and `OPENCODE_DISABLE_PROJECT_CONFIG`.
+2. **Putting a turn on API billing.** Three independent layers keep the subscription in charge, because a flag choice alone is not verifiable at runtime: the `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` variables are scrubbed from the child environment, `--bare` is never passed, and `apiKeySource` from the `system/init` event must read `none` before a single chunk is yielded. Never remove a layer because another one covers it. Copilot's metered path is BYOK, which is env-only: `COPILOT_PROVIDER_*` and the GitHub token overrides (`COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`) are scrubbed, and the private `COPILOT_HOME` is the second layer, since no config file can re-enable BYOK.
+3. **Writing into the user's own agent state.** QuickAI writes no opencode config and never touches theirs (`prompt_async` takes `system` and `tools` per request, so no `OPENCODE_CONFIG` file is needed). Throwaway calls such as titles use `--no-session-persistence` so they never land in the user's Claude Code history. The opencode child gets its own empty working directory, a random per-launch password, and `OPENCODE_DISABLE_PROJECT_CONFIG`. The copilot child always runs with a QuickAI-private `COPILOT_HOME` (auth is in the Keychain, service "copilot-cli", so login survives): that one override is what keeps QuickAI's sessions out of the user's resume list, their MCP servers from spawning under the panel, and their memory untouched. Copilot has no `--no-session-persistence`, so do not "simplify" back to the real `~/.copilot`.
 
 ## Hit every surface
 
 The most common defect here is a change that works on the path you tested. Before calling something done, walk this list and say which entries applied:
 
-- **Providers.** OpenRouter, local server, opencode, claude. A provider-shaped change needs a decision for each one, even if the decision is "not supported here".
+- **Providers.** OpenRouter, local server, opencode, claude, copilot. A provider-shaped change needs a decision for each one, even if the decision is "not supported here".
 - **Panel states.** Compact and expanded, chat and history. The panel keeps its state while hidden, so anything that must be fresh on reopen has to be refreshed explicitly (`PanelController.show()` restarts the history search for exactly this reason).
 - **Appearance.** Auto, Light and Dark all ship. No view may hard-code a color to one appearance; derive it from `colorScheme`.
 - **Keyboard and mouse.** Every panel action is reachable by keyboard, and the shortcuts bar (⌘/) lists it. A new binding that only works with the mouse is half a feature.
@@ -73,7 +73,7 @@ The most common defect here is a change that works on the path you tested. Befor
 There is no XCTest target. Each check is a script, and each one covers something a human would not catch by reading:
 
 - `./scripts/store-test.sh` after touching `ConversationStore`.
-- `./scripts/harness-test.sh` after touching `HarnessDetector`, `ProcessRunner`, `OpenCodeServer`, `OpenCodeClient` or `ClaudeCodeClient`. It covers detection under a Finder-like environment, channel separation, session reuse, no leftover process, and the claude subscription guard. Sections skip cleanly when a CLI is missing; it spends a few tokens on a free opencode model and on claude's `haiku`.
+- `./scripts/harness-test.sh` after touching `HarnessDetector`, `ProcessRunner`, `OpenCodeServer`, `OpenCodeClient`, `ClaudeCodeClient` or `CopilotClient`. It covers detection under a Finder-like environment, channel separation, session reuse, no leftover process, the claude subscription guard, the copilot BYOK scrub, and that nothing lands in the user's own `~/.copilot`. Sections skip cleanly when a CLI is missing; it spends a few tokens on a free opencode model, on claude's `haiku`, and on copilot's `auto`.
 - `./scripts/fzf-parity.sh` after touching `FuzzySearch.swift`. It diffs the port against the real `fzf` binary over the actual conversation titles.
 - Anything visual gets a screenshot of the installed app. No check covers appearance.
 
@@ -92,9 +92,9 @@ There is no XCTest target. Each check is a script, and each one covers something
 
 A Carbon hotkey (no accessibility permission) tells `PanelController` to show a borderless floating `NSPanel` whose content view is a SwiftUI `ContentView`. Key events are intercepted by a panel-local `NSEvent` monitor, since the text field never gives up focus.
 
-`ChatViewModel` owns the conversation and asks a client for an answer. `ChatClient` speaks SSE to an OpenAI-compatible endpoint; `OpenCodeClient` speaks the headless server's SSE protocol; `ClaudeCodeClient` speaks stream-json to a child process. All three yield the same `StreamChunk` stream, so the view knows nothing about providers. Answers are appended to a `Conversation` and persisted by `ConversationStore`.
+`ChatViewModel` owns the conversation and asks a client for an answer. `ChatClient` speaks SSE to an OpenAI-compatible endpoint; `OpenCodeClient` speaks the headless server's SSE protocol; `ClaudeCodeClient` speaks stream-json to a child process; `CopilotClient` speaks copilot's JSONL event stream to a child process. All four yield the same `StreamChunk` stream, so the view knows nothing about providers. Answers are appended to a `Conversation` and persisted by `ConversationStore`.
 
-Harnesses differ in lifetime. The opencode server is one long-lived child, torn down on three separate paths because `applicationWillTerminate` does not fire on SIGTERM. A claude turn is one short-lived child that exits when its stdin closes, with context kept by the CLI (`--session-id`, then `--resume`).
+Harnesses differ in lifetime. The opencode server is one long-lived child, torn down on three separate paths because `applicationWillTerminate` does not fire on SIGTERM. A claude or copilot turn is one short-lived child that exits when its stdin closes, with context kept by the CLI (`--session-id`, then `--resume`, the same two flags on both).
 
 ## Where code lives
 
@@ -105,7 +105,7 @@ Everything is in `Sources/QuickAI/`, one main type per file, no subfolders.
 - `ContentView.swift`: compact input row; expanded header, chat or history, follow-up input; shortcuts bar. `SettingsView.swift`: providers, model browser, hotkey recorder, appearance, Danger Zone.
 - `ChatViewModel.swift`, `ChatClient.swift`, `Models.swift` (+ `ConversationStore`), `AppSettings.swift`.
 - `FuzzySearch.swift` + `SearchHighlight`: a port of fzf's FuzzyMatchV2, used by history and the model browser. `ModelCatalog.swift`, `HotKey.swift`.
-- Harnesses: `HarnessDetector.swift`, `ProcessRunner.swift`, `HarnessSettings.swift` (one per kind), `OpenCodeServer.swift`, `OpenCodeClient.swift`, `ClaudeCodeClient.swift`.
+- Harnesses: `HarnessDetector.swift`, `ProcessRunner.swift`, `HarnessSettings.swift` (one per kind), `OpenCodeServer.swift`, `OpenCodeClient.swift`, `ClaudeCodeClient.swift`, `CopilotClient.swift`.
 - `scripts/` holds build and check scripts, `.github/workflows/release.yml` the release. `.agent/` is untracked session state.
 
 ## Platform traps
@@ -127,6 +127,9 @@ Everything is in `Sources/QuickAI/`, one main type per file, no subfolders.
 - **claude, two flags that look useful and are not:** `--exclude-dynamic-system-prompt-sections` is ignored whenever `--system-prompt` is given, which lean mode always does, and no `--effort` setting ever produced a `thinking_delta`, so its reasoning channel stays empty. It is wired up anyway, and unlike the opencode one that test deliberately does not assert the channel receives anything.
 - **claude, normal mode is still safe.** Without a permission handler the CLI denies anything that needs one and tells the model so (measured: the write came back refused, the turn continued, no file appeared). It does not hang waiting for an approval that can never come.
 - The question travels on stdin, never in argv. The system prompt does go in argv, so it is visible in `ps`: fine for a personal Mac, worth knowing before putting anything private in the Settings prompt field.
+- **copilot: some plans only accept `auto` for `--model`, and it is the plan, not the wrapper.** On the Copilot Student plan every explicit id comes back `not available`, including `claude-haiku-4.5`, the model `auto` itself routes to. Verified against the real `~/.copilot` and interactively: the `/model` picker says "Your Copilot Student plan currently includes only Auto" and lists everything else under "Unavailable models", which is easy to read as a working list. Do not chase this as a QuickAI bug again. The model browser (parsed out of `copilot help config`) still lists them all, because availability is the backend's per-plan call and an unavailable favorite fails per turn with that same readable error, so a plan upgrade needs no code change.
+- **copilot: the system prompt travels as `AGENTS.md` in the child's cwd**, one directory per prompt content. There is no `--system-prompt` flag, and `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` looked right but never reached the model (measured with a marker instruction). Copilot's own prompt cannot be shed, so lean mode appends to it rather than replacing it. The question goes on stdin, plain text, no `-p`: `-p` would put it in argv.
+- **copilot: `--available-tools=none` is the tool kill switch; a bare `--available-tools=` filters nothing** (measured: all 18 tools stayed visible). With tools filtered the model can still hallucinate a fake tool transcript if the question asks it to run something; nothing executes (no `tool.execution_start` events). Without any allow flags, a real tool call is denied and the turn continues, same as claude, despite the help claiming `--allow-all-tools` is "required for non-interactive mode".
 - OpenRouter free tier is the model `openrouter/free`, a router over free models. Not `openrouter/auto-beta`, which can route to paid. Limits are about 50 requests a day under a $10 lifetime balance, about 1000 above it.
 
 ## Taste

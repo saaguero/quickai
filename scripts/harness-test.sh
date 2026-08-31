@@ -3,9 +3,9 @@
 # Finder-like environment, the streaming protocol, session reuse, and teardown.
 #
 # Run it after touching HarnessDetector, ProcessRunner, OpenCodeServer,
-# OpenCodeClient or ClaudeCodeClient. It spends a few tokens on each harness,
-# never touches the user's conversation store, and skips whichever CLI is not
-# installed.
+# OpenCodeClient, ClaudeCodeClient or CopilotClient. It spends a few tokens on
+# each harness, never touches the user's conversation store, and skips
+# whichever CLI is not installed.
 #
 # The two checks that matter most:
 #
@@ -20,6 +20,8 @@
 #
 # HARNESS_TEST_MODEL overrides the auto-picked free opencode model.
 # CLAUDE_TEST_MODEL overrides the claude model (default: haiku).
+# COPILOT_TEST_MODEL overrides the copilot model (default: auto, the only value
+# some plans accept).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -32,6 +34,7 @@ SOURCES=(
     Sources/QuickAI/OpenCodeServer.swift
     Sources/QuickAI/OpenCodeClient.swift
     Sources/QuickAI/ClaudeCodeClient.swift
+    Sources/QuickAI/CopilotClient.swift
     Sources/QuickAI/ModelCatalog.swift
     Sources/QuickAI/ChatClient.swift
     Sources/QuickAI/Models.swift
@@ -64,6 +67,8 @@ struct HarnessTest {
         case "detect": await detect(.opencode)
         case "claude-detect": await detect(.claudeCode)
         case "claude": await claudeChecks()
+        case "copilot-detect": await detect(.copilot)
+        case "copilot": await copilotChecks()
         default: await opencodeChecks()
         }
     }
@@ -309,6 +314,128 @@ struct HarnessTest {
         return text
     }
 
+    // MARK: - Copilot
+
+    static func copilotChecks() async {
+        guard let install = HarnessDetector.detect(.copilot) else {
+            print("FAIL copilot binary not found")
+            exit(1)
+        }
+        defer { print(failures == 0 ? "all good" : "\(failures) failed") }
+
+        let model = ProcessInfo.processInfo.environment["COPILOT_TEST_MODEL"] ?? "auto"
+        let byok = ProcessInfo.processInfo.environment["COPILOT_PROVIDER_BASE_URL"] ?? ""
+        print("---- using \(model), stray COPILOT_PROVIDER_BASE_URL in the environment: \(byok.isEmpty ? "no" : "yes") ----")
+
+        let catalog = await ModelCatalog.fetchCopilot(install: install)
+        check(
+            "model catalog parses out of `copilot help config`",
+            catalog.count > 1 && catalog.first?.id == "auto",
+            "got \(catalog.count) entries"
+        )
+
+        let conversation = "harness-test-\(UUID().uuidString)"
+        let token = "4471"
+        let question = "Remember the number \(token). Reply with just: OK"
+        var answer = ""
+        do {
+            answer = try await collectCopilot(
+                install: install, model: model, conversation: conversation, question: question
+            )
+        } catch {
+            // This fires when the BYOK scrub regresses: the stray provider
+            // variables point at a dead endpoint, so the turn cannot succeed
+            // unless the child's environment was cleaned.
+            check("first turn streams", false, error.localizedDescription)
+            exit(1)
+        }
+
+        check(
+            "answers with stray COPILOT_PROVIDER_* variables in the environment",
+            !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            "the BYOK environment scrub regressed"
+        )
+        check(
+            "the question is not echoed into the answer",
+            !normalized(answer).contains(normalized(question)),
+            "answer starts: \(answer.prefix(60))"
+        )
+
+        var second = ""
+        do {
+            second = try await collectCopilot(
+                install: install, model: model, conversation: conversation,
+                question: "What number did I ask you to remember? Reply with the digits only."
+            )
+        } catch {
+            check("follow-up streams", false, error.localizedDescription)
+        }
+        check(
+            "context survives across turns (--session-id then --resume)",
+            second.contains(token),
+            "expected \(token), got: \(second.prefix(60))"
+        )
+
+        // A rejected model must surface the CLI's own message. The panel once
+        // showed the generic "ended without a result event" fallback instead,
+        // because stderr was snapshotted before the exiting child had written
+        // it. Costs nothing: validation happens before any model call.
+        do {
+            _ = try await collectCopilot(
+                install: install, model: "quickai-test-nonexistent-model",
+                conversation: "harness-test-\(UUID().uuidString)",
+                question: "Reply with just: OK"
+            )
+            check("a rejected model surfaces the CLI's error", false, "the turn unexpectedly succeeded")
+        } catch {
+            let message = error.localizedDescription
+            check(
+                "a rejected model surfaces the CLI's error",
+                message.contains("is not available"),
+                "got: \(message.prefix(90))"
+            )
+        }
+
+        // A conversation title is a throwaway call; it must answer, and the
+        // shell wrapper asserts around this whole section that nothing landed
+        // in the user's own ~/.copilot.
+        do {
+            var text = ""
+            for try await chunk in CopilotClient.stream(
+                install: install, model: model,
+                systemPrompt: "Answer with the requested text only.",
+                lean: true,
+                conversationId: "title-\(UUID().uuidString)",
+                messages: [Message(role: .user, content: "Reply with just: OK")],
+                ephemeral: true
+            ) {
+                if case .text(let piece) = chunk { text += piece }
+            }
+            check("an ephemeral call still answers", !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } catch {
+            check("an ephemeral call still answers", false, error.localizedDescription)
+        }
+
+        exit(failures == 0 ? 0 : 1)
+    }
+
+    static func collectCopilot(
+        install: HarnessInstall, model: String, conversation: String, question: String
+    ) async throws -> String {
+        var text = ""
+        for try await chunk in CopilotClient.stream(
+            install: install,
+            model: model,
+            systemPrompt: "You are a concise assistant. Answer directly.",
+            lean: true,
+            conversationId: conversation,
+            messages: [Message(role: .user, content: question)]
+        ) {
+            if case .text(let piece) = chunk { text += piece }
+        }
+        return text
+    }
+
     /// Sessions Claude Code persisted for QuickAI's own workspace. Scoped to
     /// that directory so a real Claude Code session running at the same time
     /// cannot make this flaky.
@@ -424,6 +551,62 @@ if "$WORK/harness-test" claude-detect >/dev/null 2>&1; then
 else
     echo
     echo "skip  claude is not installed (install Claude Code, then: claude auth login)"
+fi
+
+# ----------------------------------------------------------- GitHub Copilot
+if "$WORK/harness-test" copilot-detect >/dev/null 2>&1; then
+    echo
+    echo "==== GitHub Copilot ===="
+    echo "---- detection under a Finder-like environment ----"
+    if ! bare_env_detection copilot-detect; then
+        echo "FAIL detection fails without a shell PATH (a bundled .app would not find copilot)"
+        exit 1
+    fi
+
+    # Proof that the section below has teeth: with the BYOK variables in place,
+    # copilot routes to that provider instead of the subscription, so a dead
+    # endpoint must sink the turn. If it answered anyway, "QuickAI scrubs the
+    # BYOK variables" would be an assertion about nothing.
+    echo "---- the BYOK scrub has something to scrub ----"
+    if printf 'hi' | COPILOT_HOME="$WORK/copilot-byok-home" \
+        COPILOT_PROVIDER_BASE_URL=http://127.0.0.1:1/v1 COPILOT_PROVIDER_API_KEY=bogus COPILOT_MODEL=test-model \
+        timeout 90 copilot --output-format json --no-auto-update >/dev/null 2>&1; then
+        echo "FAIL copilot answered with a dead BYOK endpoint configured, so the next check proves nothing"
+        status=1
+    else
+        echo "ok   copilot fails against the dead BYOK endpoint when the variables are left in place"
+    fi
+
+    # Nothing QuickAI does may land in the user's own ~/.copilot: sessions go
+    # to a private COPILOT_HOME, including the throwaway title calls.
+    user_sessions_before=$(ls "$HOME/.copilot/session-state" 2>/dev/null | wc -l)
+
+    before=$(pgrep -f "copilot --output-format json" 2>/dev/null | sort || true)
+
+    echo "---- streaming, BYOK scrub, session reuse ----"
+    # The dead endpoint is deliberate: the client must strip COPILOT_PROVIDER_*
+    # from the child's environment, and the answer below is the proof that it did.
+    COPILOT_PROVIDER_BASE_URL=http://127.0.0.1:1/v1 COPILOT_PROVIDER_API_KEY=bogus COPILOT_MODEL=test-model \
+        "$WORK/harness-test" copilot || status=$?
+
+    user_sessions_after=$(ls "$HOME/.copilot/session-state" 2>/dev/null | wc -l)
+    if [ "$user_sessions_after" -ne "$user_sessions_before" ]; then
+        echo "FAIL the test wrote into the user's ~/.copilot/session-state ($user_sessions_before -> $user_sessions_after)"
+        status=1
+    else
+        echo "ok   the user's own ~/.copilot was not touched"
+    fi
+
+    leaked=$(leftover_pids "copilot --output-format json" "$before")
+    if [ -n "$leaked" ]; then
+        echo "FAIL the test left a copilot process running (pids: $leaked)"
+        status=1
+    else
+        echo "ok   no copilot process left behind"
+    fi
+else
+    echo
+    echo "skip  copilot is not installed (brew install copilot-cli, then: copilot login)"
 fi
 
 exit $status
