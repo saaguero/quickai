@@ -81,14 +81,14 @@ There is no XCTest target. Each check is a script, and each one covers something
 
 ## Commits and pull requests
 
-- Subject: imperative, at most 72 characters, no trailing period, no `type:` prefix. Name what changed for the person using the app (`Open the model selector itself with Cmd+P`), not which files moved.
-- Body only when it says something the diff cannot: the why, a measured number, an alternative that was tried and dropped. Never a retelling of the diff.
+- A commit on a PR branch is its subject line and nothing else: imperative, at most 72 characters, no trailing period, no `type:` prefix. Name what changed for the person using the app (`Open the model selector itself with Cmd+P`), not which files moved. The branch dies at the squash, so a body written here is a body nobody will ever read on main.
+- The PR title and body are the real commit message: a squash merge takes them as the subject and body of the commit that lands on main. The title follows the subject rules above. The body only says what the diff cannot: the why, a measured number, an alternative that was tried and dropped. Never a retelling of the diff.
   - Several unrelated changes: one bullet each, one or two lines per bullet.
   - A single change: two to four lines of prose.
-  - About 12 lines of body is the ceiling. Longer than that means it belongs in this file or in a comment next to the code.
-- End with the `Co-Authored-By:` trailer when an agent wrote the change.
-- One concern per commit. If the subject needs an "and", consider two commits.
-- Merges are squash or rebase, never a merge commit, and the branch is deleted on merge. A squash merge takes the PR title as the commit subject and the PR body as the commit body, so both follow the rules above.
+  - About 12 lines is the ceiling. Longer than that means it belongs in this file or in a comment next to the code.
+- End a branch commit with the `Co-Authored-By:` trailer when an agent wrote the change (the trailer does not count against the one-line rule; the squash dialog collects co-authors from branch commits).
+- One concern per PR. If the title needs an "and", consider two PRs.
+- Merges are squash or rebase, never a merge commit, and the branch is deleted on merge.
 - CodeRabbit reviews every PR. Address or rebut each comment and resolve its thread; the ruleset blocks merging while any review thread is open. Rebutting with a reply is a valid outcome, silently resolving without one is not.
 - Never open a PR unless Santi asks. PRs carry a before/after screenshot for anything visual.
 
