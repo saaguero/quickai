@@ -16,6 +16,11 @@ final class ChatViewModel: ObservableObject {
     /// Live reasoning for the answer being streamed. Progress only: it is
     /// cleared when the answer lands and never saved with the conversation.
     @Published var reasoning = ""
+    /// Whether the chat keeps scrolling to the newest token. Only a scroll the
+    /// user makes turns it off (see `PanelController.userScrolled()`), and it
+    /// comes back when they return to the bottom or send a new question.
+    /// Not published: nothing renders from it, the stream just reads it.
+    var followsLatest = true
 
     let settings: AppSettings
     private let store = ConversationStore()
@@ -48,6 +53,8 @@ final class ChatViewModel: ObservableObject {
         let provider = settings.currentProvider
         conversation.providerId = provider.id
         if conversation.title.isEmpty { conversation.title = String(question.prefix(80)) }
+        // asking again is a request to watch the answer, wherever the chat was
+        followsLatest = true
         conversation.messages.append(Message(role: .user, content: question))
         conversation.updatedAt = Date()
         error = nil

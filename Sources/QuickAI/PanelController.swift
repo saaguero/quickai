@@ -29,6 +29,9 @@ final class PanelController {
     private let settings: AppSettings
     private let openSettings: @MainActor () -> Void
     private var keyMonitor: Any?
+    private var scrollMonitor: Any?
+    private var liveScrollObservers: [NSObjectProtocol] = []
+    private var followCheckGeneration = 0
 
     init(viewModel: ChatViewModel, settings: AppSettings, openSettings: @escaping @MainActor () -> Void) {
         self.viewModel = viewModel
@@ -84,6 +87,29 @@ final class PanelController {
             MainActor.assumeIsolated {
                 self?.handle(event) ?? event
             }
+        }
+
+        // Wheel and trackpad scrolls (momentum included) arrive here before the
+        // scroll view applies them. Horizontal-only events are a code block
+        // being panned sideways, not the user leaving the answer.
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            MainActor.assumeIsolated {
+                if let self, event.window === self.panel, event.scrollingDeltaY != 0 {
+                    self.userScrolled()
+                }
+            }
+            return event
+        }
+        // Dragging the scroller is the one user scroll that is not a wheel event.
+        for name in [NSScrollView.willStartLiveScrollNotification, NSScrollView.didEndLiveScrollNotification] {
+            liveScrollObservers.append(NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] note in
+                MainActor.assumeIsolated {
+                    guard let self, (note.object as? NSScrollView)?.window === self.panel else { return }
+                    self.userScrolled()
+                }
+            })
         }
     }
 
@@ -221,6 +247,7 @@ final class PanelController {
         if viewModel.isShowingHistory {
             pageHistorySelection(command)
         } else {
+            userScrolled()
             scrollConversation(command)
         }
         flashScrollers()
@@ -263,8 +290,8 @@ final class PanelController {
         return nil
     }
 
-    private func scrollConversation(_ command: ScrollCommand) {
-        guard let scrollView = mainScrollView() else { return }
+    /// Distance scrolled from the top, and the most it can be.
+    private func verticalOffset(of scrollView: NSScrollView) -> (current: CGFloat, max: CGFloat, isFlipped: Bool) {
         let clip = scrollView.contentView
         let visible = clip.bounds.height
         let maxOffset = max(0, (scrollView.documentView?.bounds.height ?? visible) - visible)
@@ -272,6 +299,14 @@ final class PanelController {
         // handle the other orientation anyway, it is one sign either way
         let isFlipped = scrollView.documentView?.isFlipped ?? true
         let current = isFlipped ? clip.bounds.origin.y : maxOffset - clip.bounds.origin.y
+        return (current, maxOffset, isFlipped)
+    }
+
+    private func scrollConversation(_ command: ScrollCommand) {
+        guard let scrollView = mainScrollView() else { return }
+        let clip = scrollView.contentView
+        let visible = clip.bounds.height
+        let (current, maxOffset, isFlipped) = verticalOffset(of: scrollView)
 
         let target: CGFloat
         switch command {
@@ -287,6 +322,32 @@ final class PanelController {
             clip.animator().setBoundsOrigin(origin)
         }
         scrollView.reflectScrolledClipView(clip)
+    }
+
+    // MARK: - Following the answer
+
+    /// A scroll the user made outranks the stream: the chat stops chasing the
+    /// newest token at once, and once the scrolling settles it follows again
+    /// only if they left it at the bottom. Judged on user scrolls alone,
+    /// never on the stream's own `scrollTo`, which can land a hair short of
+    /// a document that is still growing and would unpin itself.
+    private func userScrolled() {
+        viewModel.followsLatest = false
+        // wait out momentum and the keyboard's scroll animation (0.12s); every
+        // new event pushes the check back, so it runs once, after the last one
+        followCheckGeneration += 1
+        let generation = followCheckGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, generation == self.followCheckGeneration else { return }
+            self.viewModel.followsLatest = self.isChatAtBottom()
+        }
+    }
+
+    private func isChatAtBottom() -> Bool {
+        // history replaces the chat's scroll view; leaving it re-pins anyway
+        guard !viewModel.isShowingHistory, let scrollView = mainScrollView() else { return true }
+        let offset = verticalOffset(of: scrollView)
+        return offset.max - offset.current <= 8
     }
 
     /// History is a selection list, so paging moves the cursor and lets the

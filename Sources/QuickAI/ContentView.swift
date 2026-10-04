@@ -275,21 +275,30 @@ struct ContentView: View {
                 .padding(.bottom, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .onChange(of: model.draft) { _ in proxy.scrollTo("bottom", anchor: .bottom) }
-            .onChange(of: model.reasoning) { _ in proxy.scrollTo("bottom", anchor: .bottom) }
-            .onChange(of: model.conversation.messages.count) { _ in proxy.scrollTo("bottom", anchor: .bottom) }
+            // the stream follows the newest token only while the user is not
+            // reading something else: a scroll they made outranks the answer
+            .onChange(of: model.draft) { _ in followLatest(proxy) }
+            .onChange(of: model.reasoning) { _ in followLatest(proxy) }
+            .onChange(of: model.conversation.messages.count) { _ in followLatest(proxy) }
             // opening a conversation (history, ⌘[ / ⌘]) lands on the newest
             // message, never at the top: the last answer is what it was opened
             // for. async because the rows do not exist yet on this pass, and
             // the message count alone cannot carry it (two conversations of
             // the same length would not change it).
             .onChange(of: model.conversation.id) { _ in
+                model.followsLatest = true
                 DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: .bottom) }
             }
             .onAppear {
+                model.followsLatest = true
                 DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: .bottom) }
             }
         }
+    }
+
+    private func followLatest(_ proxy: ScrollViewProxy) {
+        guard model.followsLatest else { return }
+        proxy.scrollTo("bottom", anchor: .bottom)
     }
 
     private func userBubble(_ question: String) -> some View {
