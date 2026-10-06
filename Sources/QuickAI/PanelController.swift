@@ -130,6 +130,9 @@ final class PanelController {
         NotificationCenter.default.post(name: Self.panelDidShow, object: nil)
         // reopening lands at the newest message: hint at what is above it
         flashScrollers(delay: 0.15)
+        // after the caret is up: the question is still being typed while a
+        // slow-starting harness gets ready for it
+        viewModel.prewarm()
     }
 
     func hide() {

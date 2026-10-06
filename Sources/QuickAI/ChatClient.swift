@@ -44,6 +44,7 @@ enum ChatClient {
                 case .opencode: missing = OpenCodeServerError.notInstalled
                 case .claudeCode: missing = ClaudeCodeClientError.notInstalled
                 case .copilot: missing = CopilotClientError.notInstalled
+                case .antigravity: missing = AntigravityClientError.notInstalled
                 }
                 return AsyncThrowingStream { $0.finish(throwing: missing) }
             }
@@ -77,8 +78,31 @@ enum ChatClient {
                     messages: messages,
                     ephemeral: ephemeral
                 )
+            case .antigravity:
+                return AntigravityClient.stream(
+                    install: install,
+                    model: provider.model,
+                    systemPrompt: provider.leanMode ? systemPrompt : nil,
+                    lean: provider.leanMode,
+                    conversationId: conversationId,
+                    messages: messages,
+                    ephemeral: ephemeral
+                )
             }
         }
+    }
+
+    /// Gets a harness ready before the question exists, where startup is the
+    /// slow part. Only Antigravity needs it: its launch spends ~5s signing in
+    /// before it can take a question, while claude and copilot start fast.
+    static func prewarm(provider: Provider, systemPrompt: String) {
+        guard case .harness(.antigravity) = provider.kind, let install = provider.install else { return }
+        AntigravityClient.prewarm(
+            install: install,
+            model: provider.model,
+            systemPrompt: provider.leanMode ? systemPrompt : nil,
+            lean: provider.leanMode
+        )
     }
 
     private static func openAIStream(provider: Provider, messages: [Message]) -> AsyncThrowingStream<StreamChunk, Error> {
