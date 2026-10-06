@@ -916,6 +916,17 @@ if "$WORK/harness-test" antigravity-detect >/dev/null 2>&1; then
     else
         echo "ok   no agy process left behind"
     fi
+
+    # Every child writes a log with sign-in details; each path that ends a
+    # child (a spare expiring, a failure before init, a stopped turn) must
+    # delete it.
+    logs=$(find "$HOME/Library/Application Support/QuickAI/antigravity-logs" -name '*.log' 2>/dev/null | wc -l | tr -d ' ' || true)
+    if [ "$logs" -ne 0 ]; then
+        echo "FAIL the test left $logs agy log(s) in Application Support"
+        status=1
+    else
+        echo "ok   no agy log left behind"
+    fi
 else
     echo
     echo "skip  agy is not installed (install the Antigravity CLI, then run agy once to sign in)"

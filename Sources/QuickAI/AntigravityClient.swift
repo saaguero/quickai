@@ -261,9 +261,13 @@ private final class AntigravityChild: @unchecked Sendable {
     /// Lets a one-shot child exit by itself once its single turn is done.
     func finishInput() { try? input.close() }
 
+    /// Also drops the child's log: a spare that expires unused, or a child
+    /// that fails before `init`, never reaches the subscription check that
+    /// normally deletes it, and the log carries sign-in details.
     func terminate() {
         finishInput()
         if process.isRunning { process.terminate() }
+        try? FileManager.default.removeItem(at: logURL)
     }
 
     /// The typed error for a result event or, failing that, whatever the
@@ -731,8 +735,22 @@ enum AntigravityClient {
     fileprivate static func logDirectory() throws -> URL {
         let directory = try supportDirectory().appendingPathComponent("antigravity-logs", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        _ = staleLogsSwept
         return directory
     }
+
+    /// Logs of children that were still running when QuickAI last quit: they
+    /// exit on stdin EOF without anyone left to delete their file. Runs once,
+    /// on the first call to `logDirectory()`, which comes before this
+    /// launch's first child creates its own log.
+    private static let staleLogsSwept: Void = {
+        guard let directory = try? supportDirectory().appendingPathComponent("antigravity-logs", isDirectory: true),
+              let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        else { return }
+        for file in files where file.pathExtension == "log" {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }()
 
     /// The text to send. A child that already holds the conversation only
     /// needs the new question; a fresh one gets the transcript as a preamble.
