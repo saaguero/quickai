@@ -179,6 +179,7 @@ struct HarnessSection: View {
         case .opencode: return .opencode(install)
         case .claudeCode: return .claudeCode
         case .copilot: return .copilot(install)
+        case .antigravity: return .antigravity(install)
         }
     }
 
@@ -206,6 +207,7 @@ enum ModelSource: Equatable {
     case opencode(HarnessInstall)
     case claudeCode
     case copilot(HarnessInstall)
+    case antigravity(HarnessInstall)
 
     /// Whether a model id that is not on the list can still be starred.
     ///
@@ -216,7 +218,7 @@ enum ModelSource: Equatable {
     var allowsCustomIds: Bool {
         switch self {
         case .claudeCode, .copilot: return true
-        case .openAI, .opencode: return false
+        case .openAI, .opencode, .antigravity: return false
         }
     }
 
@@ -394,6 +396,8 @@ struct ModelFavoritesEditor: View {
                 models = ModelCatalog.claudeCodeModels
             case .copilot(let install):
                 models = await ModelCatalog.fetchCopilot(install: install)
+            case .antigravity(let install):
+                models = try await ModelCatalog.fetchAntigravity(install: install)
             }
         } catch {
             errorText = error.localizedDescription

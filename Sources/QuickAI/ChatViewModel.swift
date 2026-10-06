@@ -220,6 +220,7 @@ final class ChatViewModel: ObservableObject {
         case .opencode: await OpenCodeClient.reset(conversationId: conversationId)
         case .claudeCode: await ClaudeCodeClient.reset(conversationId: conversationId)
         case .copilot: await CopilotClient.reset(conversationId: conversationId)
+        case .antigravity: await AntigravityClient.reset(conversationId: conversationId)
         }
     }
 
@@ -237,6 +238,7 @@ final class ChatViewModel: ObservableObject {
         isShowingHistory = false
         inputText = ""
         showFlash("New conversation")
+        prewarm()
     }
 
     // MARK: - History
@@ -434,6 +436,13 @@ final class ChatViewModel: ObservableObject {
     func cycleProvider() {
         settings.cycleProvider()
         showFlash(settings.currentProvider.shortLabel)
+        prewarm()
+    }
+
+    /// Starts the current provider ahead of the question when its startup is
+    /// the slow part (Antigravity). Runs off the main thread; cheap to repeat.
+    func prewarm() {
+        ChatClient.prewarm(provider: settings.currentProvider, systemPrompt: settings.systemPrompt)
     }
 
     func showFlash(_ text: String) {

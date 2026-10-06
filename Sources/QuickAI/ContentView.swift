@@ -226,7 +226,10 @@ struct ContentView: View {
             current: settings.currentChoice,
             label: settings.currentProvider.shortLabel,
             fontSize: fontSize,
-            onSelect: { settings.select($0) }
+            onSelect: {
+                settings.select($0)
+                model.prewarm()
+            }
         )
         .fixedSize()
     }

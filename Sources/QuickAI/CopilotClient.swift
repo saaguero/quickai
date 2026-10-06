@@ -70,49 +70,6 @@ private final class CopilotChildHandle: @unchecked Sendable {
     }
 }
 
-/// Collects the child's stderr off the reading thread: Copilot prints its
-/// errors there as plain text (`Error: Model "x" ... is not available.`) and
-/// that line is the only useful message when no `result` event ever arrives.
-///
-/// The buffer accumulates incrementally instead of waiting for EOF: stdout
-/// reaches EOF a beat before stderr closes, so a read-to-end snapshot taken at
-/// that moment was still empty and the panel showed the fallback text instead
-/// of the CLI's own message (seen live with a rejected model).
-private final class StderrBuffer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var data = Data()
-    private var closed = false
-
-    func drain(_ handle: FileHandle) {
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            while true {
-                let chunk = handle.availableData // blocks; empty means EOF
-                guard let self else { return }
-                self.lock.lock()
-                if chunk.isEmpty { self.closed = true } else { self.data.append(chunk) }
-                self.lock.unlock()
-                if chunk.isEmpty { return }
-            }
-        }
-    }
-
-    private func snapshot() -> (text: String, closed: Bool) {
-        lock.lock()
-        defer { lock.unlock() }
-        return (String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines), closed)
-    }
-
-    /// stderr so far, giving the exiting child a moment to finish writing.
-    func text(waitingUpTo timeout: TimeInterval) async -> String {
-        let deadline = Date().addingTimeInterval(timeout)
-        while true {
-            let (text, done) = snapshot()
-            if done || !text.isEmpty || Date() > deadline { return text }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-    }
-}
-
 /// Streams answers out of the local `copilot` CLI (GitHub Copilot), one child
 /// process per turn, paid by the user's Copilot subscription.
 ///

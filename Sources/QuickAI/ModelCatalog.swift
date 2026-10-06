@@ -131,6 +131,25 @@ enum ModelCatalog {
         return (["auto"] + ids).map { ModelInfo(id: $0, promptPrice: nil, completionPrice: nil) }
     }
 
+    /// Models offered for Antigravity, as `agy models` lists them for this
+    /// account: what the backend actually serves the plan, so unlike claude
+    /// and copilot there is no reason to star an id that is not on the list.
+    /// The effort level is part of the id (`gemini-3.8-flash-low`).
+    static func fetchAntigravity(install: HarnessInstall) async throws -> [ModelInfo] {
+        let output = try await Task.detached(priority: .userInitiated) {
+            try AntigravityClient.listModels(install: install)
+        }.value
+        return parseAntigravityModels(from: output).map { ModelInfo(id: $0, promptPrice: nil, completionPrice: nil) }
+    }
+
+    /// The id column of `agy models`: one `id<TAB>label` line per model.
+    static func parseAntigravityModels(from output: String) -> [String] {
+        output.split(separator: "\n").compactMap { line in
+            let id = line.split(separator: "\t", maxSplits: 1).first?.trimmingCharacters(in: .whitespaces) ?? ""
+            return id.isEmpty || id.contains(" ") ? nil : id
+        }
+    }
+
     /// The quoted ids listed directly under the "`model`:" setting. Other
     /// settings carry quoted lists too, so only the lines contiguous with that
     /// heading count.

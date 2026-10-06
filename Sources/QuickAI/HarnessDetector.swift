@@ -9,6 +9,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
     case opencode
     case claudeCode
     case copilot
+    case antigravity
 
     var id: String { rawValue }
 
@@ -21,6 +22,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
         case .opencode: return "opencode"
         case .claudeCode: return "claude"
         case .copilot: return "copilot"
+        case .antigravity: return "agy"
         }
     }
 
@@ -29,6 +31,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
         case .opencode: return "OpenCode"
         case .claudeCode: return "Claude Code"
         case .copilot: return "GitHub Copilot"
+        case .antigravity: return "Antigravity"
         }
     }
 
@@ -38,6 +41,7 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
         case .opencode: return "brew install opencode, then run: opencode auth login"
         case .claudeCode: return "install Claude Code, then run: claude auth login"
         case .copilot: return "brew install copilot-cli, then run: copilot login"
+        case .antigravity: return "install the Antigravity CLI from antigravity.google, then run agy once to sign in"
         }
     }
 
@@ -58,6 +62,11 @@ enum HarnessKind: String, CaseIterable, Identifiable, Codable {
             return (
                 "Copilot answers as a plain assistant: no tools, no MCP servers.",
                 "Copilot behaves normally, with its built-in tools and the GitHub MCP server (your own MCP servers and sessions stay untouched: QuickAI gives it a private home). Slower, and it can read files. Anything that needs permission is denied: nothing here can approve it."
+            )
+        case .antigravity:
+            return (
+                "Antigravity answers as a plain assistant: its coding prompt and every tool are off.",
+                "Antigravity behaves normally, with its own prompt and built-in tools (your rules, skills, plugins, MCP servers and conversations stay untouched: QuickAI gives it a private home). Slower, and it can read files. A turn that needs permission stops: nothing here can approve it."
             )
         }
     }
@@ -141,7 +150,8 @@ enum HarnessDetector {
 
     /// First non-empty line, trimmed. `opencode --version` prints "1.18.0";
     /// `claude --version` prints "2.1.251 (Claude Code)"; `copilot --version`
-    /// prints "GitHub Copilot CLI 1.0.82." with an update hint on line two.
+    /// prints "GitHub Copilot CLI 1.0.82." with an update hint on line two;
+    /// `agy --version` prints "1.3.0".
     private static func version(from output: String) -> String? {
         output
             .split(separator: "\n")
